@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toy Car — Interactive Scroll 3D Showcase</title>
+
+<!-- Modern Import Map for Three.js ES Modules -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+
+<!-- Embedded base64 fallback ensures the 3D model loads even when opened directly via file:// -->
+<script src="./assets/ToyCarModelData.js"></script>
+
+<style>
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:#11120f;
+  color:#f4efe6;
+  font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  overflow-x:hidden;
+}
+a{color:inherit;text-decoration:none}
+
+/* Top Scroll Progress Line */
+.scroll-progress-bar{
+  position:fixed;
+  top:0;
+  left:0;
+  height:3px;
+  background:linear-gradient(90deg, #d6a76b, #8df2aa, #4dd0e1);
+  z-index:100;
+  width:0%;
+  transition:width 0.1s linear;
+}
+
+.nav{
+  position:fixed;
+  z-index:50;
+  top:0;
+  left:0;
+  right:0;
+  height:76px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 5vw;
+  background:linear-gradient(180deg, rgba(17,18,15,0.92) 0%, rgba(17,18,15,0) 100%);
+  backdrop-filter:blur(8px);
+}
+.logo{font-weight:800;letter-spacing:.18em;font-size:14px;display:flex;align-items:center;gap:8px}
+.logo-badge{
+  font-size:10px;
+  background:#d6a76b;
+  color:#111;
+  padding:2px 7px;
+  border-radius:4px;
+  font-weight:700;
+  letter-spacing:.05em;
+}
+.navlinks{display:flex;gap:28px;font-size:13px;color:#d4cec1}
+.navlinks a:hover{color:white}
+
+/* Fixed 3D Canvas Canvas Viewport across the entire website */
+#viewer-container{
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100vh;
+  z-index:1;
+  pointer-events:auto;
+}
+#viewer{
+  width:100%;
+  height:100%;
+  display:block;
+  cursor:grab;
+}
+#viewer:active{
+  cursor:grabbing;
+}
+
+/* Background Atmosphere Glow */
+.bg-glow{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:0;
+  background:radial-gradient(circle at 68% 44%, rgba(58,77,53,0.45) 0%, rgba(30,40,30,0.2) 35%, rgba(17,18,15,0.95) 75%);
+  transition:background 0.8s ease;
+}
+.bg-glow.mood-red{
+  background:radial-gradient(circle at 68% 44%, rgba(84,24,24,0.5) 0%, rgba(44,19,21,0.25) 35%, rgba(17,18,15,0.95) 75%);
+}
+.bg-glow.mood-neon{
+  background:radial-gradient(circle at 68% 44%, rgba(22,55,74,0.5) 0%, rgba(15,31,46,0.25) 35%, rgba(17,18,15,0.95) 75%);
+}
+
+/* Scroll Stage Floating Pill */
+.stage-pill{
+  position:fixed;
+  z-index:45;
+  top:86px;
+  right:5vw;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background:rgba(21,22,19,0.85);
+  border:1px solid rgba(255,255,255,0.12);
+  padding:6px 14px;
+  border-radius:99px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.12em;
+  color:#d6a76b;
+  backdrop-filter:blur(10px);
+  box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  transition:all .3s ease;
+}
+.stage-dot{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:#d6a76b;
+  box-shadow:0 0 8px #d6a76b;
+  animation:pulse 2s infinite;
+}
+@keyframes pulse{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:0.4;transform:scale(0.85)}
+}
+
+/* Content Sections (Scroll over the fixed 3D Car) */
+.page-content{
+  position:relative;
+  z-index:10;
+  pointer-events:none;
+}
+.page-content a,
+.page-content button,
+.page-content .card,
+.page-content .specbox,
+.page-content .toolbar-container{
+  pointer-events:auto;
+}
+
+/* Section 1: Hero */
+.hero{
+  min-height:100vh;
+  position:relative;
+  display:flex;
+  align-items:center;
+  padding:0 7vw;
+}
+.copy{
+  max-width:440px;
+}
+.eyebrow{
+  display:inline-block;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.26em;
+  color:#d6a76b;
+  margin-bottom:16px;
+  text-transform:uppercase;
+}
+.copy h1{
+  font-size:clamp(46px,6.8vw,88px);
+  line-height:.92;
+  margin:0 0 22px;
+  letter-spacing:-.05em;
+  font-weight:800;
+}
+.copy p{
+  color:#c9c4b9;
+  line-height:1.7;
+  font-size:15px;
+  margin-bottom:28px;
+}
+.hero-actions{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+.cta{
+  display:inline-flex;
+  padding:13px 24px;
+  border:1px solid #a58c63;
+  border-radius:99px;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  background:rgba(165,140,99,0.14);
+  transition:all .25s ease;
+}
+.cta:hover{
+  background:#a58c63;
+  color:#111;
+  transform:translateY(-1px);
+}
+.scroll-hint{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  font-size:12px;
+  letter-spacing:.1em;
+  color:#9a9488;
+  padding:12px 18px;
+  border-radius:99px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.08);
+}
+.scroll-arrow{
+  animation:bounce 1.6s infinite;
+}
+@keyframes bounce{
+  0%,100%{transform:translateY(0)}
+  50%{transform:translateY(4px)}
+}
+
+/* Floating Interactive Studio Toolbar */
+.toolbar-container{
+  position:fixed;
+  z-index:45;
+  bottom:30px;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+  background:rgba(21,22,19,0.85);
+  border:1px solid rgba(255,255,255,0.12);
+  padding:8px 14px;
+  border-radius:99px;
+  backdrop-filter:blur(14px);
+  box-shadow:0 12px 35px rgba(0,0,0,0.6);
+}
+.tool-btn{
+  background:transparent;
+  border:1px solid #42433b;
+  color:#ded8cd;
+  padding:7px 14px;
+  border-radius:99px;
+  font-size:12px;
+  font-weight:500;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  transition:all .2s ease;
+}
+.tool-btn:hover{
+  background:rgba(255,255,255,0.08);
+  border-color:#b99763;
+  color:#fff;
+}
+.tool-btn.active{
+  background:#d6a76b;
+  border-color:#d6a76b;
+  color:#111;
+  font-weight:700;
+}
+.toolbar-divider{
+  width:1px;
+  height:20px;
+  background:#3f4038;
+  margin:0 2px;
+}
+
+/* Section 2: Details / Materials */
+.details{
+  min-height:100vh;
+  padding:130px 7vw;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+.section-title{font-size:44px;letter-spacing:-.04em;margin:0 0 16px;font-weight:800}
+.section-sub{max-width:560px;color:#bbb6ac;line-height:1.75;font-size:16px}
+.cards{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:22px;
+  margin-top:48px;
+}
+.card{
+  padding:32px 28px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(25,26,23,0.78);
+  backdrop-filter:blur(16px);
+  border-radius:22px;
+  box-shadow:0 12px 32px rgba(0,0,0,0.4);
+  transition:transform .3s ease, border-color .3s ease;
+}
+.card:hover{
+  transform:translateY(-5px);
+  border-color:#b99763;
+}
+.num{font-size:12px;color:#d6a76b;letter-spacing:.2em;font-weight:700}
+.card h3{margin:22px 0 12px;font-size:22px;letter-spacing:-.02em}
+.card p{color:#a9a59b;line-height:1.65;font-size:14px;margin:0}
+
+/* Section 3: Specs */
+.specs-section{
+  min-height:100vh;
+  padding:130px 7vw;
+  display:flex;
+  align-items:center;
+}
+.specs-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:80px;
+  align-items:center;
+  width:100%;
+}
+.specbox{
+  border-top:1px solid rgba(255,255,255,0.15);
+  background:rgba(25,26,23,0.75);
+  backdrop-filter:blur(16px);
+  padding:12px 28px;
+  border-radius:20px;
+  border:1px solid rgba(255,255,255,0.1);
+  box-shadow:0 12px 32px rgba(0,0,0,0.4);
+}
+.row{
+  display:flex;
+  justify-content:space-between;
+  padding:18px 0;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  font-size:14px;
+}
+.row:last-child{
+  border-bottom:none;
+}
+.row span:first-child{font-weight:600;color:#e8e2d5}
+.row span:last-child{color:#aaa69b}
+
+/* Section 4: Showcase Finale */
+.finale{
+  min-height:80vh;
+  padding:100px 7vw 140px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+  justify-content:center;
+}
+.finale h2{
+  font-size:clamp(36px,5vw,64px);
+  letter-spacing:-.04em;
+  margin:0 0 18px;
+  font-weight:800;
+}
+.finale p{
+  max-width:540px;
+  color:#bbb6ac;
+  line-height:1.7;
+  font-size:16px;
+  margin-bottom:32px;
+}
+
+footer{
+  padding:35px 7vw;
+  border-top:1px solid rgba(255,255,255,0.1);
+  background:rgba(17,18,15,0.92);
+  color:#77756e;
+  font-size:11px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  position:relative;
+  z-index:20;
+}
+
+/* Status hint */
+.hint{
+  position:fixed;
+  z-index:45;
+  right:5vw;
+  bottom:30px;
+  font-size:11px;
+  letter-spacing:.14em;
+  color:#a39d91;
+  background:rgba(17,18,15,0.78);
+  padding:7px 14px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.1);
+  backdrop-filter:blur(10px);
+}
+
+@media(max-width:960px){
+  .toolbar-container{bottom:20px;width:90vw;justify-content:center;border-radius:18px}
+  .stage-pill{display:none}
+  .hint{display:none}
+  .copy{max-width:100%}
+  .copy h1{font-size:46px}
+  .cards,.specs-grid{grid-template-columns:1fr}
+  .details,.specs-section{padding:90px 6vw}
+}
+</style>
+</head>
+<body>
+
+<div class="scroll-progress-bar" id="progressBar"></div>
+
+<nav class="nav">
+  <div class="logo">
+    <span>TOY / CAR</span>
+    <span class="logo-badge">3D SCROLL STUDIO</span>
+  </div>
+  <div class="navlinks">
+    <a href="#showcase">Showcase</a>
+    <a href="#details">Materials</a>
+    <a href="#specs">Specifications</a>
+    <a href="#finale">Inspect</a>
+  </div>
+</nav>
+
+<div class="bg-glow" id="bgGlow"></div>
+
+<!-- Stage indicator that updates automatically with scroll -->
+<div class="stage-pill" id="stagePill">
+  <span class="stage-dot"></span>
+  <span id="stageText">STAGE 1 / 3 · SHOWCASE</span>
+</div>
+
+<!-- Fixed 3D Viewport in background: Stays pinned as you scroll -->
+<div id="viewer-container">
+  <canvas id="viewer"></canvas>
+</div>
+
+<!-- Interactive Floating Studio Toolbar -->
+<div class="toolbar-container">
+  <button class="tool-btn active" id="btnReelMode">
+    <span id="reelIcon">🎬</span> Reel Cam: ON
+  </button>
+  <button class="tool-btn" id="btnAutoReel">
+    <span id="playIcon">▶</span> Play Reel
+  </button>
+  <div class="toolbar-divider"></div>
+  <button class="tool-btn active" id="btnFloat">
+    <span>✨</span> Dynamics
+  </button>
+  <button class="tool-btn" id="btnZoomIn" title="Zoom In 3D Model">
+    <span>🔍+</span>
+  </button>
+  <button class="tool-btn" id="btnZoomOut" title="Zoom Out 3D Model">
+    <span>🔍−</span>
+  </button>
+  <div class="toolbar-divider"></div>
+  <button class="tool-btn" id="btnMood">
+    <span id="moodIcon">🌿</span> Mood
+  </button>
+  <button class="tool-btn" id="btnTop">
+    <span>↑</span> Top
+  </button>
+</div>
+
+<div id="status" class="hint">SCROLL FOR CINEMATIC REEL CAMERA · DRAG TO ORBIT</div>
+
+<!-- Scrollable Web Content -->
+<div class="page-content">
+
+  <!-- Section 1: Hero -->
+  <header class="hero" id="showcase">
+    <div class="copy">
+      <div class="eyebrow">Cinematic 3D Car Reel · 2026</div>
+      <h1>Built to<br>be seen.</h1>
+      <p>Automotive reel cinematography: low-angle bumper rushes, door-sill flybys, Dutch-tilt banking, and FPV drone sweeps as you scroll down the page.</p>
+      <div class="hero-actions">
+        <button class="cta" id="btnHeroPlayReel">▶ Play Cinematic Reel</button>
+        <a class="cta" style="background:transparent;border-color:rgba(255,255,255,0.2)" href="#details">Explore Story</a>
+        <div class="scroll-hint">
+          <span class="scroll-arrow">↓</span> Scroll for reel camera
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Section 2: Material Details -->
+  <section class="details" id="details">
+    <div class="eyebrow">PBR MATERIAL STUDY</div>
+    <h2 class="section-title">Small object.<br>Big personality.</h2>
+    <p class="section-sub">As you scroll, the toy car glides across the studio and angles into a side profile view, highlighting factory automotive lacquering and refractive window glass.</p>
+    
+    <div class="cards">
+      <article class="card">
+        <div class="num">01</div>
+        <h3>Clearcoat Finish</h3>
+        <p>Layered high-gloss clearcoat simulates factory automotive lacquering with sharp highlight reflections along every body curve.</p>
+      </article>
+      <article class="card">
+        <div class="num">02</div>
+        <h3>Glass Transmission</h3>
+        <p>Physical light transmission and refraction showcase the windshield and cockpit interior with realistic optical depth.</p>
+      </article>
+      <article class="card">
+        <div class="num">03</div>
+        <h3>Sheen & Fabric</h3>
+        <p>Fine microscopic surface sheen response softens the seat upholstery, contrasting the gloss metallic paintwork.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- Section 3: Technical Specifications -->
+  <section class="specs-section" id="specs">
+    <div class="specs-grid">
+      <div>
+        <div class="eyebrow">ENGINEERING PROFILE</div>
+        <h2 class="section-title">Precision in<br>every curve.</h2>
+        <p class="section-sub">Inspecting the toy car from a top-down blueprint angle. Notice how the chassis proportions, wheel offsets, and vintage contour line balance nostalgia with modern 3D rendering.</p>
+      </div>
+      <div class="specbox">
+        <div class="row"><span>Model Asset</span><span>Khronos Sample ToyCar</span></div>
+        <div class="row"><span>Format</span><span>glTF Binary (GLB)</span></div>
+        <div class="row"><span>Interaction</span><span>Scroll-Driven Motion + Free Orbit</span></div>
+        <div class="row"><span>PBR Extensions</span><span>Clearcoat, Transmission, Sheen</span></div>
+        <div class="row"><span>Animations</span><span>Kinematic Scroll Path, Floating Suspension</span></div>
+        <div class="row"><span>Lighting Rig</span><span>Three-point Studio Rig + HDR PMREM</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Finale & Free Inspection -->
+  <section class="finale" id="finale">
+    <div class="eyebrow">FREE INSPECTION DOCK</div>
+    <h2>Take the Wheel.</h2>
+    <p>You have reached the end of the choreographed scroll tour. Click and drag anywhere to freely orbit, inspect details up close, or toggle studio lighting moods.</p>
+    <div class="hero-actions">
+      <a class="cta" href="#showcase">↑ Return to Top</a>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <span>Interactive Scroll 3D Showcase · Toy Car Studio</span>
+  <span>WebGL · Three.js r169</span>
+</footer>
+
+<!-- Three.js 3D Scroll-Driven Motion Script -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+// DOM Elements
+const canvas = document.querySelector('#viewer');
+const status = document.querySelector('#status');
+const progressBar = document.querySelector('#progressBar');
+const stageText = document.querySelector('#stageText');
+const bgGlow = document.querySelector('#bgGlow');
+const btnScrollAnim = document.querySelector('#btnReelMode') || document.querySelector('#btnScrollAnim');
+const btnAutoReel = document.querySelector('#btnAutoReel');
+const btnHeroPlayReel = document.querySelector('#btnHeroPlayReel');
+const playIcon = document.querySelector('#playIcon');
+const scrollIcon = document.querySelector('#reelIcon') || document.querySelector('#scrollIcon');
+const btnFloat = document.querySelector('#btnFloat');
+const btnMood = document.querySelector('#btnMood');
+const moodIcon = document.querySelector('#moodIcon');
+const btnTop = document.querySelector('#btnTop');
+const btnZoomIn = document.querySelector('#btnZoomIn');
+const btnZoomOut = document.querySelector('#btnZoomOut');
+
+// State flags
+let reelMode = true;
+let hoverAnim = true;
+let isUserDragging = false;
+let userDragIdleTimer = null;
+let currentMoodIndex = 0;
+let isAutoReeling = false;
+let autoReelStartTime = 0;
+const autoReelDuration = 14000; // 14-second automotive reel sequence
+
+const moods = [
+  { name: 'emerald', icon: '🌿', bgClass: '', keyLight: 0xfffaf0, rimLight: 0x8df2aa, exposure: 1.25 },
+  { name: 'ruby', icon: '🏎', bgClass: 'mood-red', keyLight: 0xffeedd, rimLight: 0xff6b7a, exposure: 1.3 },
+  { name: 'neon', icon: '💎', bgClass: 'mood-neon', keyLight: 0xe0f7ff, rimLight: 0x4dd0e1, exposure: 1.2 }
+];
+
+// Renderer setup
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  alpha: true,
+  powerPreference: 'high-performance'
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = moods[0].exposure;
+
+// Scene & Camera
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.05, 50);
+camera.position.set(2.35, 0.75, 2.05);
+
+// Environment setup
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+// Lighting Rig
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+scene.add(ambientLight);
+
+const keyLight = new THREE.DirectionalLight(moods[0].keyLight, 2.5);
+keyLight.position.set(4, 5, 4);
+scene.add(keyLight);
+
+const rimLight = new THREE.DirectionalLight(moods[0].rimLight, 2.0);
+rimLight.position.set(-4, 3, -3);
+scene.add(rimLight);
+
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+fillLight.position.set(0, -3, 3);
+scene.add(fillLight);
+
+// Ground Pedestal & Soft Contact Shadow
+const stageGroup = new THREE.Group();
+scene.add(stageGroup);
+
+function createShadowTexture(){
+  const size = 512;
+  const shadowCanvas = document.createElement('canvas');
+  shadowCanvas.width = size;
+  shadowCanvas.height = size;
+  const ctx = shadowCanvas.getContext('2d');
+  
+  const grad = ctx.createRadialGradient(size/2, size/2, 20, size/2, size/2, size/2);
+  grad.addColorStop(0, 'rgba(0, 0, 0, 0.65)');
+  grad.addColorStop(0.35, 'rgba(0, 0, 0, 0.38)');
+  grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.1)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(shadowCanvas);
+}
+
+const shadowGeo = new THREE.PlaneGeometry(3.5, 3.5);
+const shadowMat = new THREE.MeshBasicMaterial({
+  map: createShadowTexture(),
+  transparent: true,
+  depthWrite: false
+});
+const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+shadowMesh.rotation.x = -Math.PI / 2;
+shadowMesh.position.y = 0.002;
+stageGroup.add(shadowMesh);
+
+// Sleek Pedestal Ring
+const ringGeo = new THREE.RingGeometry(1.70, 1.72, 64);
+const ringMat = new THREE.MeshBasicMaterial({
+  color: 0x9b855e,
+  transparent: true,
+  opacity: 0.28,
+  side: THREE.DoubleSide
+});
+const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+ringMesh.rotation.x = -Math.PI / 2;
+ringMesh.position.y = 0.001;
+stageGroup.add(ringMesh);
+
+// Root Pivot for Model & Choreographed Motion
+const carGroup = new THREE.Group();
+scene.add(carGroup);
+
+// Internal offset group for centering model inside pivot
+const modelOffsetGroup = new THREE.Group();
+carGroup.add(modelOffsetGroup);
+
+// OrbitControls (allows user to drag, rotate & inspect at any moment)
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.enablePan = false;
+controls.enableZoom = false; // Mouse wheel scrolls the webpage naturally without zooming the 3D camera
+controls.minDistance = 1.6;
+controls.maxDistance = 8.5;
+controls.maxPolarAngle = Math.PI / 2 - 0.02;
+controls.target.set(0.18, 0.45, 0.00);
+
+// Allow zoom only when holding Ctrl key (Ctrl + Mouse Wheel)
+window.addEventListener('keydown', e => {
+  if(e.key === 'Control') controls.enableZoom = true;
+});
+window.addEventListener('keyup', e => {
+  if(e.key === 'Control') controls.enableZoom = false;
+});
+
+// Model Loading with Instant Base64 Fallback & HTTP Handling
+const loader = new GLTFLoader();
+
+function handleModelLoaded(gltf){
+  const model = gltf.scene;
+
+  // Measure and normalize scale
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  
+  // Normalize model scale to ~2.0 world units for comfortable framing
+  const fitScale = 2.0 / maxDim;
+  model.scale.setScalar(fitScale);
+
+  // Update matrices to calculate true centered bounds
+  model.updateMatrixWorld(true);
+  box.setFromObject(model);
+  const center = box.getCenter(new THREE.Vector3());
+
+  // Center model inside offset group with base sitting cleanly on the pedestal
+  model.position.x = -center.x;
+  model.position.y = -box.min.y;
+  model.position.z = -center.z;
+
+  modelOffsetGroup.add(model);
+
+  // Smooth entrance
+  modelOffsetGroup.scale.setScalar(0.01);
+  const revealStart = performance.now();
+  const revealDuration = 800;
+  function revealAnim(now){
+    const elapsed = now - revealStart;
+    const p = Math.min(elapsed / revealDuration, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    modelOffsetGroup.scale.setScalar(ease);
+    if(p < 1) requestAnimationFrame(revealAnim);
+  }
+  requestAnimationFrame(revealAnim);
+
+  status.textContent = '3D REEL READY · SCROLL TO FLY CAMERA · CLICK ▶ TO AUTO-PLAY';
+  setTimeout(() => {
+    status.style.opacity = '0.85';
+  }, 2500);
+}
+
+function loadToyCar(){
+  status.textContent = 'LOADING 3D CAR MODEL…';
+  const isFileProtocol = window.location.protocol === 'file:';
+  const hasBase64 = typeof window.TOY_CAR_MODEL_BASE64 === 'string' && window.TOY_CAR_MODEL_BASE64.length > 1000;
+
+  if(isFileProtocol && hasBase64){
+    loader.load(
+      'data:application/octet-stream;base64,' + window.TOY_CAR_MODEL_BASE64,
+      handleModelLoaded,
+      undefined,
+      err => {
+        console.error('Base64 load failed:', err);
+        status.textContent = 'LOAD ERROR — PLEASE OPEN VIA LOCAL WEB SERVER';
+      }
+    );
+  } else {
+    loader.load(
+      './assets/ToyCar.glb',
+      handleModelLoaded,
+      xhr => {
+        if(xhr.total > 0){
+          const pct = Math.round((xhr.loaded / xhr.total) * 100);
+          status.textContent = `LOADING 3D MODEL: ${pct}%`;
+        }
+      },
+      err => {
+        console.warn('Direct fetch failed, falling back to embedded data:', err);
+        if(hasBase64){
+          loader.load(
+            'data:application/octet-stream;base64,' + window.TOY_CAR_MODEL_BASE64,
+            handleModelLoaded,
+            undefined,
+            fallbackErr => {
+              console.error('All load methods failed:', fallbackErr);
+              status.textContent = 'PLEASE RUN START_SHOWCASE.BAT OR USE A LOCAL SERVER';
+            }
+          );
+        } else {
+          status.textContent = 'PLEASE RUN START_SHOWCASE.BAT OR USE A LOCAL SERVER';
+        }
+      }
+    );
+  }
+}
+loadToyCar();
+
+// Drag-and-drop support: drop any GLB file right onto the webpage
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  const file = e.dataTransfer?.files?.[0];
+  if(file && (file.name.endsWith('.glb') || file.name.endsWith('.gltf'))){
+    status.textContent = `LOADING ${file.name}…`;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      loader.parse(ev.target.result, '', gltf => {
+        while(modelOffsetGroup.children.length > 0){
+          modelOffsetGroup.remove(modelOffsetGroup.children[0]);
+        }
+        handleModelLoaded(gltf);
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  }
+});
+
+// ---------------------------------------------------------------------
+// CINEMATIC AUTOMOTIVE CAR REEL CAMERA SYSTEM
+// Low-angle bumper sweeps, door-sill flybys, FPV drone dives,
+// Dutch-tilt banking, and dynamic chassis suspension reactions!
+// ---------------------------------------------------------------------
+
+const currentCameraUp = new THREE.Vector3(0, 1, 0);
+
+let userZoomScale = 1.0; // Interactive zoom factor: 1.0 is default zoomed out, buttons let user customize further
+
+// Waypoints for the Car Reel Sequence (Zoomed out & perfectly framed around car)
+const reelWaypoints = [
+  {
+    // Shot 1: Front bumper track, looking up with Dutch tilt (zoomed out hero framing)
+    fraction: 0.00,
+    camPos: new THREE.Vector3(2.35, 0.75, 2.05),
+    target: new THREE.Vector3(0.18, 0.45, 0.00),
+    roll: -0.10, // -6 deg Dutch tilt
+    carYaw: 0.22,
+    carPos: new THREE.Vector3(0.42, 0, 0),
+    stageLabel: '🎬 SHOT 1 · LOW BUMPER TRACK'
+  },
+  {
+    // Shot 2: Speeding low along the side-skirt and door sill, catching reflections
+    fraction: 0.26,
+    camPos: new THREE.Vector3(0.22, 0.65, 2.45),
+    target: new THREE.Vector3(0.05, 0.45, 0.10),
+    roll: 0.12, // +7 deg Dutch tilt looking along the door
+    carYaw: 0.10,
+    carPos: new THREE.Vector3(-0.15, 0, 0.05),
+    stageLabel: '🎬 SHOT 2 · DOOR SILL FLYBY'
+  },
+  {
+    // Shot 3: High-speed FPV drone dive over the roof & windshield canopy
+    fraction: 0.52,
+    camPos: new THREE.Vector3(-1.45, 2.40, 1.35),
+    target: new THREE.Vector3(-0.05, 0.45, 0.00),
+    roll: -0.20, // -11 deg drone bank angle
+    carYaw: -0.16,
+    carPos: new THREE.Vector3(0.10, 0, -0.05),
+    stageLabel: '🎬 SHOT 3 · FPV DRONE OVERHEAD'
+  },
+  {
+    // Shot 4: Low-slung rear quarter & tailpipe chase angle
+    fraction: 0.78,
+    camPos: new THREE.Vector3(-2.20, 0.70, -1.25),
+    target: new THREE.Vector3(0.05, 0.45, -0.10),
+    roll: 0.12, // +7 deg chase bank
+    carYaw: -0.28,
+    carPos: new THREE.Vector3(-0.25, 0, 0),
+    stageLabel: '🎬 SHOT 4 · REAR CHASE CAM'
+  },
+  {
+    // Shot 5: Grand crane pull-out revealing the complete car
+    fraction: 1.00,
+    camPos: new THREE.Vector3(3.20, 1.80, 3.20),
+    target: new THREE.Vector3(0.05, 0.45, 0.00),
+    roll: 0.00, // Levels out gracefully
+    carYaw: 0.20,
+    carPos: new THREE.Vector3(0.00, 0, 0),
+    stageLabel: '🎬 SHOT 5 · CRANE PULL-OUT HERO'
+  }
+];
+
+function evaluateReelPose(progress){
+  const p = Math.max(0, Math.min(progress, 1));
+  let i = 0;
+  while(i < reelWaypoints.length - 2 && reelWaypoints[i + 1].fraction < p){
+    i++;
+  }
+  const w0 = reelWaypoints[i];
+  const w1 = reelWaypoints[i + 1];
+
+  const segRange = w1.fraction - w0.fraction;
+  const localT = (p - w0.fraction) / segRange;
+  // Smooth cubic ease
+  const ease = localT * localT * (3 - 2 * localT);
+
+  const rawCamPos = new THREE.Vector3().lerpVectors(w0.camPos, w1.camPos, ease);
+  const target = new THREE.Vector3().lerpVectors(w0.target, w1.target, ease);
+  const carPos = new THREE.Vector3().lerpVectors(w0.carPos, w1.carPos, ease);
+  const carYaw = THREE.MathUtils.lerp(w0.carYaw, w1.carYaw, ease);
+  const roll = THREE.MathUtils.lerp(w0.roll, w1.roll, ease);
+  const label = p > 0.88 ? w1.stageLabel : w0.stageLabel;
+
+  // Apply userZoomScale relative to target
+  const offset = new THREE.Vector3().subVectors(rawCamPos, target).multiplyScalar(userZoomScale);
+  const camPos = new THREE.Vector3().addVectors(target, offset);
+
+  return { camPos, target, carPos, carYaw, roll, label };
+}
+
+// User drag detection (allows free orbit without glitching scroll motion)
+function markUserActive(){
+  isUserDragging = true;
+  if(userDragIdleTimer) clearTimeout(userDragIdleTimer);
+  userDragIdleTimer = setTimeout(() => {
+    isUserDragging = false;
+  }, 2400);
+}
+
+canvas.addEventListener('pointerdown', markUserActive);
+canvas.addEventListener('wheel', () => {
+  if(isAutoReeling) stopAutoReel();
+});
+canvas.addEventListener('pointermove', e => {
+  if(e.buttons > 0) markUserActive();
+});
+
+// Auto-Reel Player
+function startAutoReel(){
+  isAutoReeling = true;
+  autoReelStartTime = performance.now();
+  if(playIcon) playIcon.textContent = '⏸';
+  if(btnAutoReel) btnAutoReel.classList.add('active');
+  reelMode = true;
+  if(btnScrollAnim) btnScrollAnim.classList.add('active');
+}
+
+function stopAutoReel(){
+  isAutoReeling = false;
+  if(playIcon) playIcon.textContent = '▶';
+  if(btnAutoReel) btnAutoReel.classList.remove('active');
+}
+
+if(btnAutoReel){
+  btnAutoReel.addEventListener('click', () => {
+    if(isAutoReeling) stopAutoReel();
+    else startAutoReel();
+  });
+}
+if(btnHeroPlayReel){
+  btnHeroPlayReel.addEventListener('click', () => {
+    startAutoReel();
+  });
+}
+
+// UI Event Listeners
+btnScrollAnim.addEventListener('click', () => {
+  reelMode = !reelMode;
+  btnScrollAnim.classList.toggle('active', reelMode);
+  btnScrollAnim.innerHTML = `<span id="reelIcon">🎬</span> Reel Cam: ${reelMode ? 'ON' : 'OFF'}`;
+});
+
+btnFloat.addEventListener('click', () => {
+  hoverAnim = !hoverAnim;
+  btnFloat.classList.toggle('active', hoverAnim);
+  if(!hoverAnim){
+    carGroup.position.y = 0;
+    carGroup.rotation.z = 0;
+    carGroup.rotation.x = 0;
+  }
+});
+
+btnMood.addEventListener('click', () => {
+  currentMoodIndex = (currentMoodIndex + 1) % moods.length;
+  const mood = moods[currentMoodIndex];
+  moodIcon.textContent = mood.icon;
+  
+  bgGlow.className = 'bg-glow ' + mood.bgClass;
+  keyLight.color.setHex(mood.keyLight);
+  rimLight.color.setHex(mood.rimLight);
+  renderer.toneMappingExposure = mood.exposure;
+});
+
+btnZoomIn.addEventListener('click', () => {
+  userZoomScale = Math.max(userZoomScale * 0.88, 0.55);
+  status.textContent = `ZOOM LEVEL: ${Math.round((1 / userZoomScale) * 100)}%`;
+  setTimeout(() => {
+    status.textContent = '3D REEL READY · SCROLL TO FLY CAMERA · CLICK ▶ TO AUTO-PLAY';
+  }, 1800);
+});
+
+btnZoomOut.addEventListener('click', () => {
+  userZoomScale = Math.min(userZoomScale * 1.15, 2.2);
+  status.textContent = `ZOOM LEVEL: ${Math.round((1 / userZoomScale) * 100)}%`;
+  setTimeout(() => {
+    status.textContent = '3D REEL READY · SCROLL TO FLY CAMERA · CLICK ▶ TO AUTO-PLAY';
+  }, 1800);
+});
+
+btnTop.addEventListener('click', () => {
+  if(isAutoReeling) stopAutoReel();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// Window resize handling with responsive FOV for portrait/mobile screens
+function resize(){
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  renderer.setSize(width, height);
+  camera.aspect = width / height;
+  if(camera.aspect < 1.0){
+    camera.fov = 40 + (1.0 - camera.aspect) * 20; // Auto zoom-out on narrower viewports
+  } else {
+    camera.fov = 40;
+  }
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+// Smooth scroll state with spring/damping interpolation
+let smoothedScroll = 0;
+let rawScroll = 0;
+let lastScrollY = window.scrollY;
+let scrollVelocity = 0;
+
+window.addEventListener('scroll', () => {
+  const scrollMax = document.documentElement.scrollHeight - window.innerHeight;
+  rawScroll = scrollMax > 0 ? window.scrollY / scrollMax : 0;
+  
+  // Update top progress line
+  progressBar.style.width = (rawScroll * 100) + '%';
+  
+  // Calculate instant scroll velocity
+  const delta = window.scrollY - lastScrollY;
+  scrollVelocity = delta * 0.003;
+  lastScrollY = window.scrollY;
+
+  // Reset user drag when scrolling so choreographic motion smoothly takes back over
+  if(Math.abs(delta) > 8){
+    isUserDragging = false;
+  }
+});
+
+// Animation Loop
+const clock = new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+
+  const delta = clock.getDelta();
+  const time = clock.getElapsedTime();
+
+  // 1. Auto-Reel playback (cinematic automotive reel video pacing)
+  if(isAutoReeling){
+    const elapsed = performance.now() - autoReelStartTime;
+    const progress = Math.min(elapsed / autoReelDuration, 1);
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    window.scrollTo({
+      top: progress * maxScroll,
+      behavior: 'instant'
+    });
+    if(progress >= 1){
+      stopAutoReel();
+    }
+  }
+
+  // 2. Smooth scroll interpolation (damped inertia)
+  smoothedScroll += (rawScroll - smoothedScroll) * 0.08;
+
+  if(reelMode){
+    const pose = evaluateReelPose(smoothedScroll);
+
+    if(stageText && stageText.textContent !== pose.label){
+      stageText.textContent = pose.label;
+    }
+
+    const isMobile = window.innerWidth <= 960;
+    const finalCarX = isMobile ? 0 : pose.carPos.x;
+    const finalTargetX = isMobile ? 0 : pose.target.x;
+
+    carGroup.position.x += (finalCarX - carGroup.position.x) * 0.1;
+    carGroup.position.z += (pose.carPos.z - carGroup.position.z) * 0.1;
+    stageGroup.position.x = carGroup.position.x;
+    stageGroup.position.z = carGroup.position.z;
+
+    if(!isUserDragging){
+      // --- CAR REEL CAMERA ORIENTATION (DUTCH TILT & FPV GIMBAL) ---
+      const roll = pose.roll;
+      // Camera Up vector for Dutch tilt banking
+      const upTarget = new THREE.Vector3(-Math.sin(roll), Math.cos(roll), 0);
+      currentCameraUp.lerp(upTarget, 0.08);
+      camera.up.copy(currentCameraUp);
+
+      // Subtle FPV gimbal breathing / chase car vibration
+      const gimbalFloatX = Math.sin(time * 3.2) * 0.006;
+      const gimbalFloatY = Math.cos(time * 2.6) * 0.005;
+
+      camera.position.x += (pose.camPos.x + gimbalFloatX - camera.position.x) * 0.08;
+      camera.position.y += (pose.camPos.y + gimbalFloatY - camera.position.y) * 0.08;
+      camera.position.z += (pose.camPos.z - camera.position.z) * 0.08;
+
+      controls.target.x += (finalTargetX - controls.target.x) * 0.08;
+      controls.target.y += (pose.target.y - controls.target.y) * 0.08;
+      controls.target.z += (pose.target.z - controls.target.z) * 0.08;
+
+      camera.lookAt(controls.target);
+
+      // --- CHASSIS DYNAMICS (REAL CAR POSTURE, NOT SPINNING) ---
+      // Grounded forward-facing stance with subtle steering yaw
+      carGroup.rotation.y += (pose.carYaw - carGroup.rotation.y) * 0.08;
+
+      // Acceleration Squat & Braking Pitch based on scroll velocity
+      const velocitySquat = -Math.max(-0.15, Math.min(0.15, scrollVelocity * 1.6));
+      carGroup.rotation.x += (velocitySquat - carGroup.rotation.x) * 0.12;
+
+      // Centrifugal chassis lean into camera corners
+      const turnLean = -roll * 0.35;
+      carGroup.rotation.z += (turnLean - carGroup.rotation.z) * 0.08;
+    }
+  }
+
+  // Subtle Suspension idle & engine vibration
+  if(hoverAnim){
+    const idleBob = Math.sin(time * 2.0) * 0.016;
+    const engineRumble = Math.sin(time * 32.0) * 0.0008; // realistic engine rumble
+    carGroup.position.y = idleBob + engineRumble;
+
+    const shadowScale = 1 - idleBob * 1.4;
+    shadowMesh.scale.set(shadowScale, shadowScale, 1);
+  }
+
+  if(isUserDragging){
+    controls.update();
+  }
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
